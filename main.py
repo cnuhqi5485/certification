@@ -10,43 +10,63 @@ st.title("📋 우리 부서 체크리스트 시스템")
 # 1. 구글 시트 연결
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# 2. 데이터 가져오기 및 전처리
+# 2. 데이터 가져오기 및 강력한 전처리
 try:
-    # [핵심 수정] header=1 : 엑셀의 첫 줄(제목)을 건너뛰고 두 번째 줄부터 읽습니다.
-    data = conn.read(ttl=0, header=1)
-    df = pd.DataFrame(data)
+    # 엑셀의 두 번째 줄(header=1)을 제목으로 읽어옵니다.
+    df = conn.read(header=1)
+    
+    # [핵심 수정 1] 컬럼 이름의 앞뒤 공백을 싹 제거합니다.
+    df.columns = df.columns.str.strip()
 
-    # 엑셀의 영어/한글 컬럼명을 코드가 이해하는 이름으로 바꿉니다.
-    rename_map = {
-        "기준 번호": "문항",
-        "Question": "질문",
-        "조사결과": "평가",
-        "Answer": "답변",
-        "조사 장소": "평가장소",
-        "대상": "평가대상"
-    }
-    # 실제 컬럼명 변경 적용
-    df = df.rename(columns=rename_map)
+    # [핵심 수정 2] 이름이 정확하지 않아도 핵심 단어로 찾아서 바꿉니다.
+    # 예: " 기준 번호 " -> "문항", "Question" -> "질문"
+    new_columns = {}
+    for col in df.columns:
+        if "기준" in col and "번호" in col:
+            new_columns[col] = "문항"
+        elif "Question" in col or "질문" in col:
+            new_columns[col] = "질문"
+        elif "Answer" in col or "답변" in col:
+            new_columns[col] = "답변"
+        elif "조사 장소" in col or "장소" in col:
+            new_columns[col] = "평가장소"
+        elif "대상" in col:
+            new_columns[col] = "평가대상"
+        elif "조사결과" in col or "평가" in col:
+            new_columns[col] = "평가"
+            
+    # 찾은 이름들을 실제로 적용
+    df = df.rename(columns=new_columns)
 
-    # '문항' 컬럼을 문자열(글자)로 변환 (1.5, 2.2.1 같은 숫자를 문자로 인식시키기 위해)
-    if '문항' in df.columns:
-        df['문항'] = df['문항'].astype(str)
+    # "문항" 컬럼이 제대로 만들어졌는지 확인하고, 없으면 강제로 만듭니다.
+    if "문항" not in df.columns:
+        # 혹시라도 못 찾았으면 첫 번째 컬럼을 '문항'으로 간주
+        df.columns.values[0] = "문항"
 
-    # '담당위원' 컬럼이 없으면 새로 만듭니다.
+    # [데이터 정리]
+    # 1. '문항' 컬럼을 글자(String)로 변환 (숫자 1.1과 문자 1.1을 똑같이 처리하기 위해)
+    df['문항'] = df['문항'].astype(str)
+    
+    # 2. 문항 번호가 없거나(nan), 이상한 행(None) 제거
+    # (사진에 보이는 Row 0 같은 불필요한 행을 지워줍니다)
+    df = df[df['문항'] != 'nan'] 
+    df = df[df['문항'] != 'None']
+
+    # 3. '담당위원' 컬럼 처리
     if '담당위원' not in df.columns:
         df['담당위원'] = ""
     else:
-        # 기존 담당위원이 있다면 빈칸(NaN)을 공백("")으로 채움
         df['담당위원'] = df['담당위원'].fillna("")
 
-    # '평가' 컬럼도 빈칸 처리
+    # 4. '평가' 컬럼 처리
     if '평가' not in df.columns:
         df['평가'] = ""
     else:
         df['평가'] = df['평가'].fillna("")
 
 except Exception as e:
-    st.error(f"데이터를 불러오는 중 오류가 발생했습니다: {e}")
+    st.error(f"데이터 처리 중 문제가 발생했습니다: {e}")
+    st.write("현재 인식된 컬럼명:", df.columns.tolist()) # 에러 시 원인 파악용
     st.stop()
 
 # 탭 나누기
@@ -61,7 +81,7 @@ with tab1:
     user_name = st.text_input("위원님의 성함을 입력해주세요", placeholder="예: 최준석")
 
     if user_name:
-        # 담당위원이 내 이름인 것만 필터링
+        # 내 이름이 포함된 행 찾기
         my_tasks = df[df['담당위원'] == user_name]
 
         if my_tasks.empty:
@@ -69,17 +89,16 @@ with tab1:
         else:
             st.success(f"반갑습니다 {user_name} 위원님! 총 {len(my_tasks)}개의 문항이 있습니다.")
             
-            # 보여줄 컬럼만 선택 (문항, 질문, 답변, 평가)
-            # 엑셀에 있는 컬럼만 보여주도록 필터링
-            cols_to_show = ['문항', '평가장소', '질문', '답변', '평가']
-            available_cols = [c for c in cols_to_show if c in my_tasks.columns]
+            # 보여줄 컬럼 (존재하는 것만)
+            target_cols = ['문항', '평가장소', '질문', '답변', '평가']
+            cols_to_show = [c for c in target_cols if c in df.columns]
 
             edited_df = st.data_editor(
-                my_tasks[available_cols],
+                my_tasks[cols_to_show],
                 column_config={
                     "평가": st.column_config.TextColumn(
-                        "평가 결과 (상/중/하)",
-                        help="여기에 평가 내용을 입력하세요",
+                        "평가 결과",
+                        help="상 / 중 / 하 등을 입력하세요",
                         required=True
                     ),
                     "문항": st.column_config.Column(disabled=True),
@@ -94,17 +113,11 @@ with tab1:
 
             if st.button("평가 완료 및 저장", type="primary"):
                 try:
-                    # 원본 데이터(df)의 '평가' 컬럼을 업데이트
-                    # edited_df의 인덱스를 사용하여 원본 위치에 값을 넣음
                     df.loc[my_tasks.index, '평가'] = edited_df['평가']
-                    
-                    # 구글 시트에 업데이트
                     conn.update(data=df)
-                    
-                    st.toast("✅ 평가 내용이 저장되었습니다!", icon="💾")
+                    st.toast("저장 완료!", icon="✅")
                     st.cache_data.clear()
                     st.rerun()
-                    
                 except Exception as e:
                     st.error(f"저장 실패: {e}")
 
@@ -118,7 +131,6 @@ with tab2:
     if admin_pw == "1234":
         
         st.subheader("1. 문항 배정하기")
-        st.info("엑셀의 '기준 번호'를 기준으로 배정합니다.")
         
         col1, col2 = st.columns(2)
         with col1:
@@ -129,36 +141,32 @@ with tab2:
         if st.button("위원 배정 실행"):
             if target_member and target_ids:
                 try:
-                    # 입력된 문항 번호를 리스트로 만듦 (공백 제거)
+                    # 콤마로 쪼개고 공백 제거
                     id_list = [x.strip() for x in target_ids.split(',')]
                     
-                    # [중요] 엑셀의 문항 번호와 비교 (둘 다 문자열로)
+                    # [디버깅용] 어떤 번호를 찾으려 하는지 화면에 표시
+                    # st.write(f"찾으려는 번호: {id_list}")
+                    
+                    # 비교 로직: '문항' 컬럼을 문자열로 바꿔서 비교
                     mask = df['문항'].astype(str).isin(id_list)
                     
                     if mask.any():
-                        # 해당 문항의 담당위원을 업데이트
                         df.loc[mask, '담당위원'] = target_member
-                        
-                        # 구글 시트 저장
                         conn.update(data=df)
-                        
-                        st.success(f"'{target_member}' 위원에게 문항 {len(df[mask])}개가 배정되었습니다.")
+                        st.success(f"'{target_member}' 위원에게 {mask.sum()}개의 문항이 배정되었습니다.")
+                        st.cache_data.clear()
                         st.rerun()
                     else:
-                        st.error(f"입력하신 문항 번호({target_ids})를 찾을 수 없습니다. '기준 번호'를 확인해주세요.")
+                        st.error(f"문항 번호를 찾지 못했습니다. (입력값: {id_list})")
+                        st.warning("팁: 아래 전체 결과 표의 '문항' 컬럼에 있는 번호와 똑같이 입력했는지 확인해보세요.")
                 except Exception as e:
-                    st.error(f"오류 발생: {e}")
+                    st.error(f"오류: {e}")
             else:
-                st.warning("이름과 문항 번호를 입력해주세요.")
+                st.warning("이름과 번호를 모두 입력해주세요.")
 
         st.divider()
         st.subheader("2. 전체 결과 확인")
         st.dataframe(df)
 
         csv = df.to_csv(index=False).encode('utf-8-sig')
-        st.download_button(
-            label="전체 결과 CSV 다운로드",
-            data=csv,
-            file_name='checklist_result.csv',
-            mime='text/csv',
-        )
+        st.download_button("전체 결과 CSV 다운로드", csv, 'checklist_result.csv', 'text/csv')
