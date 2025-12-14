@@ -75,62 +75,80 @@ if input_name:
         else:
             st.info("내용을 수정하고 '저장하기' 버튼을 누르세요.")
             
-            # 1. 데이터 편집기 (여기만 수정됨!)
+            # ---------------------------------------------------------
+            # 1. 데이터 편집기 (최종 수정됨)
+            # ---------------------------------------------------------
             edited_df = st.data_editor(
                 my_data,
-                hide_index=True,          # 인덱스 숨기기
-                use_container_width=True, # 가로로 꽉 차게
+                hide_index=True,
+                use_container_width=True,
                 height=600,
                 key="editor",
-                # 👇 [핵심] Answer 열을 '상, 중, 하' 선택 박스로 변경하는 설정
                 column_config={
-                    "Answer": st.column_config.SelectboxColumn(
-                        label="평가 결과",        # 컬럼 제목
-                        help="상, 중, 하 중 하나를 선택하세요.",
-                        width="medium",          # 너비 설정
-                        options=[                # 선택지 목록
-                            "상", 
-                            "중", 
-                            "하"
-                        ],
-                        required=True,           # 빈 값 허용 안 함 (선택 필수)
+                    # (1) 질문: 읽기 전용 (수정 불가)
+                    "Question": st.column_config.TextColumn(
+                        label="❓ 점검 항목",
+                        width="medium",
+                        disabled=True 
+                    ),
+                    # (2) 정답(Answer): 위원님이 봐야 할 기준 (수정 불가)
+                    "Answer": st.column_config.TextColumn(
+                        label="✅ 인증 기준 (정답)",
+                        help="이 기준에 부합하는지 확인하세요.",
+                        width="large",
+                        disabled=True  # 👈 여기가 핵심! 내용은 보이지만 수정은 안 됩니다.
+                    ),
+                    # (3) 평가 결과: 여기서 상/중/하 선택 (실제 값은 '상' 열에 저장)
+                    "상": st.column_config.SelectboxColumn(
+                        label="👉 평가 결과", 
+                        help="결과를 선택하세요.",
+                        width="small",
+                        options=["상", "중", "하"], # 선택지
+                        required=True
+                    ),
+                    # (4) 비고: 추가 의견 작성
+                    "비고": st.column_config.TextColumn(
+                        label="📝 비고 (의견)",
+                        width="medium"
                     )
                 },
-                # 👇 수정 불가능한 컬럼 설정 (실수로 문제 내용을 지우지 않게)
-                disabled=["기준번호", "조사장소", "대상", "Question"] 
+                # 화면에 보여줄 순서 ('중', '하' 열은 화면에서 숨김)
+                column_order=["기준번호", "Question", "Answer", "상", "비고"],
+                
+                # 전체적으로 수정 금지할 컬럼들 다시 한번 안전장치
+                disabled=["기준번호", "조사장소", "대상", "Question", "Answer"]
             )
-
-
-
-
             
-            # 2. 진짜 저장 버튼 (클라우드로 전송)
+            # ---------------------------------------------------------
+            # 2. 진짜 저장 버튼
+            # ---------------------------------------------------------
             if st.button("☁️ 클라우드에 저장하기", type="primary"):
-                with st.spinner("저장 중입니다..."):
+                with st.spinner("평가 결과를 저장 중입니다..."):
                     try:
-                        # 1) 보낼 데이터 준비 (기준번호와 Answer만 추려서 보냄)
-                        # 'Question'이나 다른 컬럼은 수정 안 할거니까, 식별자(기준번호)랑 답변만 보냅니다.
-                        # 주의: 시트의 컬럼명과 정확히 일치해야 합니다! ('Answer')
-                        data_to_send = edited_df[['기준번호', 'Answer']].to_dict(orient='records')
+                        # 1) 보낼 데이터 준비 
+                        # 기준번호(ID), 상(평가결과), 비고(의견)만 보냅니다.
+                        # Question이나 Answer는 안 보냅니다 (어차피 안 바꿨으니까요).
+                        data_to_send = edited_df[['기준번호', '상', '비고']].to_dict(orient='records')
                         
-                        # 2) 전송할 보따리 만들기
+                        # 2) 전송 데이터 포장
                         payload = {
                             "user_name": input_name,
                             "data": data_to_send
                         }
                         
-                        # 3) Apps Script로 전송 (POST 요청)
+                        # 3) Apps Script로 전송
                         response = requests.post(save_url, json=payload)
                         
                         # 4) 결과 확인
                         if "성공" in response.text:
-                            st.success("✅ 저장 완료! 구글 시트가 업데이트되었습니다.")
-                            st.cache_data.clear() # 캐시 비워서 새로고침 시 반영되게 함
+                            st.success("✅ 저장 완료! 평가 결과가 반영되었습니다.")
+                            st.cache_data.clear() 
                         else:
                             st.error(f"저장 실패. 서버 응답: {response.text}")
                             
                     except Exception as e:
                         st.error(f"에러가 발생했습니다: {e}")
+
 
 else:
     st.info("👈 왼쪽 사이드바에 성함을 입력해주세요.")
