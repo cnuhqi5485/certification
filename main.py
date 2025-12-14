@@ -56,13 +56,10 @@ with st.sidebar:
 
 # --- 메인 로직 ---
 if input_name:
-    # 이름 찾기
     user_row = df_admin[df_admin['이름'] == input_name]
     
     if user_row.empty:
         st.error(f"⛔ '{input_name}' 위원님은 등록되지 않았습니다.")
-        with st.expander("등록된 위원 명단 보기"):
-            st.dataframe(df_admin)
     else:
         st.success(f"👋 환영합니다, **{input_name}** 위원님!")
         
@@ -70,21 +67,50 @@ if input_name:
         permission_str = str(user_row.iloc[0]['기준번호'])
         target_ids = [x.strip() for x in permission_str.split(',')]
         
-        # 필터링
+        # 내 번호만 필터링
         my_data = df_main[df_main['기준번호'].isin(target_ids)]
         
         if my_data.empty:
-            st.warning(f"배정된 문항({target_ids})을 찾을 수 없습니다.")
+            st.warning("배정된 문항이 없습니다.")
         else:
-            st.write(f"총 **{len(my_data)}개**의 평가 문항이 배정되었습니다.")
+            st.info("내용을 수정하고 '저장하기' 버튼을 누르세요.")
             
-            # 평가 화면
-            st.data_editor(
+            # 1. 데이터 편집기
+            edited_df = st.data_editor(
                 my_data,
                 hide_index=True,
                 use_container_width=True,
                 height=600,
                 key="editor"
             )
+            
+            # 2. 진짜 저장 버튼 (클라우드로 전송)
+            if st.button("☁️ 클라우드에 저장하기", type="primary"):
+                with st.spinner("저장 중입니다..."):
+                    try:
+                        # 1) 보낼 데이터 준비 (기준번호와 Answer만 추려서 보냄)
+                        # 'Question'이나 다른 컬럼은 수정 안 할거니까, 식별자(기준번호)랑 답변만 보냅니다.
+                        # 주의: 시트의 컬럼명과 정확히 일치해야 합니다! ('Answer')
+                        data_to_send = edited_df[['기준번호', 'Answer']].to_dict(orient='records')
+                        
+                        # 2) 전송할 보따리 만들기
+                        payload = {
+                            "user_name": input_name,
+                            "data": data_to_send
+                        }
+                        
+                        # 3) Apps Script로 전송 (POST 요청)
+                        response = requests.post(save_url, json=payload)
+                        
+                        # 4) 결과 확인
+                        if "성공" in response.text:
+                            st.success("✅ 저장 완료! 구글 시트가 업데이트되었습니다.")
+                            st.cache_data.clear() # 캐시 비워서 새로고침 시 반영되게 함
+                        else:
+                            st.error(f"저장 실패. 서버 응답: {response.text}")
+                            
+                    except Exception as e:
+                        st.error(f"에러가 발생했습니다: {e}")
+
 else:
     st.info("👈 왼쪽 사이드바에 성함을 입력해주세요.")
