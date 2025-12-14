@@ -21,7 +21,7 @@ gid_main = "0"            # 보통 첫 번째 시트는 0입니다. (확인 필�
 
 try:
     # 3. 판다스로 직접 불러오기 (Connection 안 씀 -> 에러 해결!)
-    base_url = f"https://docs.google.com/spreadsheets/d/1sbsE7aRpQYf3E_GZhIuvC4Ht6d9R22zs/export?format=csv&gid="
+    base_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid="
     
     # (1) 관리자 데이터 읽기
     df_admin = pd.read_csv(base_url + gid_admin)
