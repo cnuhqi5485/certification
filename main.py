@@ -129,34 +129,47 @@ if input_name:
             )
             
             # ---------------------------------------------------------
-            # 2. 진짜 저장 버튼
+            # 2. 진짜 저장 버튼 (데이터 전송 방식 개선)
             # ---------------------------------------------------------
             if st.button("☁️ 클라우드에 저장하기", type="primary"):
-                with st.spinner("평가 결과를 저장 중입니다..."):
+                with st.spinner(f"'{input_name}' 위원님의 개인 시트에 저장 중..."):
                     try:
-                        # 1) 보낼 데이터 준비 
-                        # 기준번호(ID), 상(평가결과), 비고(의견)만 보냅니다.
-                        # Question이나 Answer는 안 보냅니다 (어차피 안 바꿨으니까요).
-                        data_to_send = edited_df[['기준번호', '상', '비고']].to_dict(orient='records')
+                        # 1) 보낼 데이터 준비 (안전하게 복사본 생성)
+                        export_df = edited_df[['기준번호', 'Question', 'Answer', '상', '비고']].copy()
                         
-                        # 2) 전송 데이터 포장
+                        # 2) ★핵심 수정: 컬럼 이름을 영어로 변경 (한글 깨짐/오류 방지)
+                        export_df = export_df.rename(columns={
+                            '기준번호': 'id',
+                            'Question': 'question',
+                            'Answer': 'answer',
+                            '상': 'result',  # '상'을 result로 변경
+                            '비고': 'note'     # '비고'를 note로 변경
+                        })
+                        
+                        # 3) 빈 값(NaN)을 빈 문자열("")로 변환 (중요!)
+                        export_df = export_df.fillna("")
+                        
+                        data_to_send = export_df.to_dict(orient='records')
+                        
+                        # 4) 전송 데이터 포장
                         payload = {
                             "user_name": input_name,
                             "data": data_to_send
                         }
                         
-                        # 3) Apps Script로 전송
+                        # 5) Apps Script로 전송
                         response = requests.post(save_url, json=payload)
                         
-                        # 4) 결과 확인
                         if "성공" in response.text:
-                            st.success("✅ 저장 완료! 평가 결과가 반영되었습니다.")
-                            st.cache_data.clear() 
+                            st.success(f"✅ 저장 완료! '{input_name}' 탭을 확인해보세요.")
+                            # 캐시 삭제
+                            st.cache_data.clear()
                         else:
                             st.error(f"저장 실패. 서버 응답: {response.text}")
                             
                     except Exception as e:
                         st.error(f"에러가 발생했습니다: {e}")
+
 
 
 else:
