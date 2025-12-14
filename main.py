@@ -41,9 +41,18 @@ try:
     # (2) 설문 데이터 읽기 (skiprows=1 적용)
     df_main = pd.read_csv(base_url + gid_main, skiprows=1)
     
-    # (3) 데이터 다듬기
+    # (3) 데이터 다듬기 (수정된 버전)
     df_main = df_main.dropna(subset=['기준번호'])
     df_main['기준번호'] = df_main['기준번호'].astype(str)
+    
+    # 👇 [중요] 에러 해결 코드: 빈 칸을 빈 문자열("")로 채우고, 강제로 글자 형식으로 변환
+    cols_to_fix = ['Question', 'Answer', '상', '비고']
+    
+    for col in cols_to_fix:
+        if col not in df_main.columns:
+            df_main[col] = ""  # 만약 열이 없으면 새로 만듦
+        df_main[col] = df_main[col].fillna("").astype(str) # 빈 값 제거 및 문자열 변환
+
 
 except Exception as e:
     st.error(f"❌ 데이터 로딩 실패! GID 숫자를 정확히 입력했는지 확인해주세요.\n에러 내용: {e}")
