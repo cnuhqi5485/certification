@@ -14,7 +14,7 @@ st.title("🏥 2025년도 인증 조사 평가 시스템")
 # =========================================================
 # 👇 아까 복사한 '웹 앱 URL'을 여기에 붙여넣으세요!
 # =========================================================
-save_url = "https://script.google.com/macros/s/AKfycbxEuITzDh6_M1PqW0kdx5Msd9gghtY-2yNFqJo7a2RRT89GpayPkwSFocUTG1ZJf90u/exec"
+save_url = "https://script.google.com/macros/s/AKfycbxznJf7DM3sL3cWPunDoq8bgUTpbHoQPtc3-qqYpNeP3zw5t8mKHXeWqRZQ-PgnEcxP/exec"
 
 # =========================================================
 # 👇 여기에 복사해온 정보를 입력하세요! (따옴표 안에 넣으세요)
